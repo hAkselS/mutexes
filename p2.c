@@ -43,14 +43,14 @@ struct state_struct {
  * from the number of threads that haven't finished yet. */
 static void * thread(void * arg)
 {
-  struct state_struct * state = (struct state_struct *) arg;
+  struct state_struct * state = (struct state_struct *) arg;    //create a state_struct called 'state'. set equal to arg (2nd part is a guess)
   while (state->start == 0) {   // loop until all are ready to start
   }
-  for (int i = 0; i < state->num_loops; i++) {
-    state->counter++;
+    for (int i = 0; i < state->num_loops; i++) {  //not using pointers this would be "i < state.num_loops"
+        state->counter++;
   }
   printf ("thread %ld finishing\n", state->threads);
-  state->threads--;
+  state->threads--;                             //decrament number of threads 
   return NULL;
 }
 
@@ -78,15 +78,18 @@ static char * all_times (struct timeval start, clock_t startc)
 
 int main (int argc, char ** argv)
 {
-  long num_threads = (argc <= 1) ? THREADS : atoi (argv[1]);
+  //create threads 
+  long num_threads = (argc <= 1) ? THREADS : atoi (argv[1]);   //am I true ? if yes : if no //is no arguement #of threads = 2, else it equals user input
   struct state_struct state =
     { .start = 0, .counter = 0, .threads = 0,
-      .num_loops = (argc <= 2) ? LOOPS : atoi (argv[2]) };
+      .num_loops = (argc <= 2) ? LOOPS : atoi (argv[2]) };     //10 * 1000 * 1000 unless another argument is specified 
   while (state.threads < num_threads) {
     pthread_t t;
-    pthread_create (&t, NULL, thread, (void *)&state);
-    state.threads++;
+    pthread_create (&t, NULL, thread, (void *)&state);         //address = t, start routine = threat() <above>, state is the arguement 
+    state.threads++;                                           //incease the number of threads in state 
   }
+
+  //get time of loop 
   struct timeval start;
   gettimeofday (&start, NULL);
   clock_t startc = clock();
