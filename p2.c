@@ -30,6 +30,10 @@
 #define LOOPS	10 * 1000 * 1000
 #define THREADS	2
 
+//create the mutex 
+pthread_mutex_t countLock; 
+//pthread_mutex_t decreLock; //lock that ensure proper decrement order
+
 struct state_struct {
   int start;             // 0 until ready to start
   volatile long counter; // volatile: always read the value from memory
@@ -47,10 +51,13 @@ static void * thread(void * arg)
   while (state->start == 0) {   // loop until all are ready to start
   }
     for (int i = 0; i < state->num_loops; i++) {  //not using pointers this would be "i < state.num_loops"
+        pthread_mutex_lock(&countLock);           //lock only the section where the counter is being updated 
         state->counter++;
+        pthread_mutex_unlock(&countLock);
   }
   printf ("thread %ld finishing\n", state->threads);
-  state->threads--;                             //decrament number of threads 
+  state->threads--;                             //decrament number of threads @TODO: ensure #of threads is always correct
+  printf("bababio there are %ld threads\n",state->threads); //test with <clear && rm a.out && clang p2.c && ./a.out 12 20>
   return NULL;
 }
 
@@ -78,6 +85,11 @@ static char * all_times (struct timeval start, clock_t startc)
 
 int main (int argc, char ** argv)
 {
+  //initialize the mutex 
+  if (pthread_mutex_init(&countLock, NULL) != 0){
+    printf( "mutex initialization failed\n" );
+    return -1; 
+  }
   //create threads 
   long num_threads = (argc <= 1) ? THREADS : atoi (argv[1]);   //am I true ? if yes : if no //is no arguement #of threads = 2, else it equals user input
   struct state_struct state =
@@ -87,6 +99,7 @@ int main (int argc, char ** argv)
     pthread_t t;
     pthread_create (&t, NULL, thread, (void *)&state);         //address = t, start routine = threat() <above>, state is the arguement 
     state.threads++;                                           //incease the number of threads in state 
+    printf("there are %ld threads\n",state.threads);     //TEST CODE
   }
 
   //get time of loop 
