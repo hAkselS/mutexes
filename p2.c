@@ -32,7 +32,7 @@
 
 //create the mutex 
 pthread_mutex_t countLock; 
-//pthread_mutex_t decreLock; //lock that ensure proper decrement order
+pthread_mutex_t decreLock; //lock that ensures no reace conditions of decrement & end 
 
 struct state_struct {
   int start;             // 0 until ready to start
@@ -55,9 +55,12 @@ static void * thread(void * arg)
         state->counter++;
         pthread_mutex_unlock(&countLock);
   }
-  printf ("thread %ld finishing\n", state->threads);
+  //ensure that the state.threads is decremented accurately
+  pthread_mutex_lock(&decreLock);
+  printf ("{in thread:} thread %ld finishing\n", state->threads);
   state->threads--;                             //decrament number of threads @TODO: ensure #of threads is always correct
-  printf("bababio there are %ld threads\n",state->threads); //test with <clear && rm a.out && clang p2.c && ./a.out 12 20>
+  //printf("{in thread}: there are %ld threads\n",state->threads); //test with <clear && rm a.out && clang p2.c && ./a.out 12 20>
+  pthread_mutex_unlock(&decreLock); 
   return NULL;
 }
 
@@ -87,9 +90,14 @@ int main (int argc, char ** argv)
 {
   //initialize the mutex 
   if (pthread_mutex_init(&countLock, NULL) != 0){
-    printf( "mutex initialization failed\n" );
+    printf( "countLock mutex initialization failed\n" );
     return -1; 
   }
+  if (pthread_mutex_init(&decreLock, NULL) != 0){
+    printf( "decreLock mutex initialization failed\n" );
+    return -1; 
+  }
+
   //create threads 
   long num_threads = (argc <= 1) ? THREADS : atoi (argv[1]);   //am I true ? if yes : if no //is no arguement #of threads = 2, else it equals user input
   struct state_struct state =
@@ -99,7 +107,7 @@ int main (int argc, char ** argv)
     pthread_t t;
     pthread_create (&t, NULL, thread, (void *)&state);         //address = t, start routine = threat() <above>, state is the arguement 
     state.threads++;                                           //incease the number of threads in state 
-    printf("there are %ld threads\n",state.threads);     //TEST CODE
+    printf("{thread creator}: there are %ld threads\n",state.threads);     //TEST CODE
   }
 
   //get time of loop 
@@ -107,6 +115,7 @@ int main (int argc, char ** argv)
   gettimeofday (&start, NULL);
   clock_t startc = clock();
   state.start = 1;   // start all the threads
+  printf("MADE IT TO WHILE LOOP\n");
   while (state.threads > 0)
     ;   /* loop until all the threads are done */
   printf ("%ld total count, expected %ld, time %ss\n",
