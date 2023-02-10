@@ -30,9 +30,14 @@
 #define LOOPS	10 * 1000 * 1000
 #define THREADS	2
 
+
 //create the mutex 
-pthread_mutex_t countLock; 
-pthread_mutex_t decreLock; //lock that ensures no reace conditions of decrement & end 
+static pthread_mutex_t countLock; //ensures no race conditions on the counter
+static pthread_mutex_t decreLock; //ensures no race conditions on decrement & end 
+static pthread_mutex_t mainLock;  //locks the main thread while other threads are running
+//create the condition 
+static int threadComplete  = 0;   
+static pthread_cond_t waitCond;   //wait for the threads to finish 
 
 struct state_struct {
   int start;             // 0 until ready to start
@@ -47,19 +52,36 @@ struct state_struct {
  * from the number of threads that haven't finished yet. */
 static void * thread(void * arg)
 {
+  pthread_mutex_lock(&mainLock);
+  //int firstRun = 1; //1 for first run, 0 else
+  //if(firstRun)
+
   struct state_struct * state = (struct state_struct *) arg;    //create a state_struct called 'state'. set equal to arg (2nd part is a guess)
-  while (state->start == 0) {   // loop until all are ready to start
+  while (state->start == 0) {   // loop until all are ready to start //@TODO: use a wait here 
   }
+         //first thread to execute will start wait condition 
+    pthread_cond_wait(&waitCond,&mainLock);
+
+    
+    
     for (int i = 0; i < state->num_loops; i++) {  //not using pointers this would be "i < state.num_loops"
         pthread_mutex_lock(&countLock);           //lock only the section where the counter is being updated 
         state->counter++;
         pthread_mutex_unlock(&countLock);
   }
+
+  pthread_mutex_unlock(&mainLock);        //location undetermined 
+
   //ensure that the state.threads is decremented accurately
   pthread_mutex_lock(&decreLock);
   printf ("{in thread:} thread %ld finishing\n", state->threads);
-  state->threads--;                             //decrament number of threads @TODO: ensure #of threads is always correct
-  //printf("{in thread}: there are %ld threads\n",state->threads); //test with <clear && rm a.out && clang p2.c && ./a.out 12 20>
+  state->threads--;                             //decrament number of threads 
+  //test this feature with <clear && rm a.out && clang p2.c && ./a.out 12 20>
+  
+  if( (state->threads) == 0 ){          //send a signal to allow the main thread to continue
+    pthread_cond_signal(&waitCond);     //this is my incorrect theory of how this should work 
+  }
+
   pthread_mutex_unlock(&decreLock); 
   return NULL;
 }
@@ -97,6 +119,10 @@ int main (int argc, char ** argv)
     printf( "decreLock mutex initialization failed\n" );
     return -1; 
   }
+  if (pthread_mutex_init(&mainLock, NULL) != 0){
+    printf( "mainLock mutex initialization failed\n" );
+    return -1; 
+  }
 
   //create threads 
   long num_threads = (argc <= 1) ? THREADS : atoi (argv[1]);   //am I true ? if yes : if no //is no arguement #of threads = 2, else it equals user input
@@ -115,10 +141,22 @@ int main (int argc, char ** argv)
   gettimeofday (&start, NULL);
   clock_t startc = clock();
   state.start = 1;   // start all the threads
-  printf("MADE IT TO WHILE LOOP\n");
-  while (state.threads > 0)
-    ;   /* loop until all the threads are done */
+  
+  sleep(1);                             //sleep so the threads can get the lock first 
+  pthread_mutex_lock(&mainLock);        //must aquire this lock before moving forward
+
+  //old comment //need to give the lock to another thread and hand it back to this one when all other threads are finished
+  printf("about to spin\n");
+  while (state.threads > 0){/* loop until all the threads are done */
+    printf("SPINNING\n");
+    sleep(1);
+  }
+
   printf ("%ld total count, expected %ld, time %ss\n",
           state.counter, state.num_loops * num_threads,
           all_times (start, startc));
+
+  pthread_mutex_unlock(&mainLock); //unlock this lock 
+
+  return 0; 
 }
